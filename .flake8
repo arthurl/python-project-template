@@ -1,0 +1,11 @@
+# -*- mode: conf -*-
+
+[flake8]
+# See https://pypi.org/project/flake8-black/
+select = C,E,F,W,BLK
+extend-ignore =
+    # See https://black.readthedocs.io/en/stable/faq.html#why-are-flake8-s-e203-and-w503-violated
+    E203
+    # no point since I'm already using black
+    E501
+max-line-length = 88
