@@ -2,4 +2,4 @@
 
 Run tests:
 
-    pytest
+    poetry run pytest

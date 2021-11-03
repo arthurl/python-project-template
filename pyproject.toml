@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "arthurlib"  # has to be the same as first level folder, with - changed to _
+version = "0.1.0"
+description = ""
+authors = ["Arthur Lee <me@arthur.li>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+# use `poetry add -dev pytest@latest` to upgrade
+pytest = "^5.2"
+pylint = "^2.11.1"
+flake8 = "^4.0.1"
+flake8-black = "^0.2.3"
+mypy = "^0.910"
+data-science-types = "^0.2.23"
+types-requests = "^2.25.11"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+arthurexec = "arthurlib.lib:hello"
