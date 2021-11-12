@@ -1,7 +1,9 @@
 """Module"""
 # pylint: disable=unused-import, missing-function-docstring
 
-from typing import TypeVar, Optional, Tuple, Dict, List, Any, Iterable
+import rcm.lib
+
+from typing import Dict, List, Any
 
 import time
 
@@ -17,106 +19,25 @@ import pandas as pd
 ################################################################################
 
 
-def asHtmlTable(
-    ls: Iterable[Tuple], colHeaders: bool = True, rowHeaders: bool = True
-) -> Any:
-    it = iter(ls)
-    table = []
-    if colHeaders:
-        try:
-            headers = next(it)
-            table.append(
-                html.Thead(html.Tr([(html.Th(h) if h else html.Th()) for h in headers]))
-            )
-        except StopIteration:
-            pass
-    table.append(
-        html.Tbody(
-            children=[
-                html.Tr(
-                    [html.Th(r[0]) if rowHeaders else html.Td(r[0])]
-                    + [html.Td(x) for x in r[1:]]
-                )
-                for r in it
-                if r
-            ]
-        )
-    )
-    return dbc.Table(table)
-
-
-Index = TypeVar("Index")
-
-
-def get_nearest_index(timeseries: pd.DataFrame, i: Index) -> Optional[Index]:
-    try:
-        return timeseries.index[timeseries.index.get_loc(i, method="nearest")]  # type: ignore[attr-defined, return-value]
-    except KeyError:
-        return None
-
-
-def rcm_download_bloomberg_ticker(ticker: str) -> pd.DataFrame:
-    import urllib
-    import io
-    import win32com.client  # type: ignore
-    import pythoncom  # type: ignore
-
-    url = r"http://quantweb/workflow-coordinator/workflows/run/HistoricSnapperTimeSeries.csv"
-    query = {
-        "StartDate": "1970-01-01",
-        "EndDate": "2199-01-01",
-        "SnapFields": "Last",
-        "Field": "Price",
-        "Tickers": ticker,
-    }
-    # This code here is to set up NTLM authentication
-    h = win32com.client.Dispatch("WinHTTP.WinHTTPRequest.5.1", pythoncom.CoInitialize())
-    h.SetAutoLogonPolicy(0)
-    print(f'INFO: Downloading ticker "{ticker}"')
-    start_time = time.perf_counter_ns()
-    h.Open("POST", url + "?" + urllib.parse.urlencode(query), False)  # type: ignore[attr-defined]
-    h.Send()
-    with io.StringIO(h.responseText) as buf:
-        result = pd.read_csv(buf, parse_dates=["Date"]).rename(columns=str.lower)  # type: ignore[arg-type]
-    print(
-        f'INFO: Downloaded ticker "{ticker}" in '
-        f"{(time.perf_counter_ns() - start_time) / 1000000}ms"
-    )
-    return result[result["message"] != "No response for date"][["date", "last"]]
-
-
-################################################################################
-
-
-tickers_ref_data: pd.DataFrame = (
-    pd.read_csv(r"c:/src/cotdatafetcher/test_data/tickers.csv")
-    .rename(columns=str.lower)  # type: ignore
-    .set_index("ticker")
-)
+tickers_ref_data: pd.DataFrame = pd.read_csv(r"data/tickers.csv").set_index("Ticker")
 
 
 def get_timeseries(ticker: str) -> pd.DataFrame:
     import os
 
-    path: str = f"c:/src/python/python-project-template/data/{ticker}.csv"
+    path: str = f"data/cache/{ticker}.csv"
     if os.path.exists(path):
         print(f"INFO: Reading {path}")
         result = pd.read_csv(
             path,
-            parse_dates=["date"],
-        ).set_index("date")
+            parse_dates=["Date"],
+        ).set_index("Date")
     else:
         print(f"INFO: {path} does not exist.")
-        result = rcm_download_bloomberg_ticker(ticker).set_index("date")
+        result = rcm.lib.rcm_download_bloomberg_ticker(ticker + " Index").set_index(
+            "Date"
+        )
         result.to_csv(path)
-    return result
-
-
-def f(ticker: str) -> pd.DataFrame:
-    result = pd.read_csv(
-        f"c:/src/python/python-project-template/data/{ticker}.csv",
-        parse_dates=["date"],
-    ).set_index("date")
     return result
 
 
@@ -124,15 +45,15 @@ def mk_card(ticker: str):  # type: ignore[no-untyped-def]
     ticker_ref_data = tickers_ref_data.loc[ticker]
     ts = get_timeseries(ticker)
 
-    metric = str.title(str(ticker_ref_data["metric"]))
+    metric = str.title(str(ticker_ref_data["Metric"]))
     df_graph = dcc.Graph(
         figure=px.scatter(
             ts,
             x=ts.index,
-            y="last",
+            y="Last",
             labels={
                 (ts.index.name): str.title(ts.index.name),  # type: ignore[attr-defined]
-                "last": metric,
+                "Last": metric,
             },
         ).update_layout(
             margin={"t": 0, "l": 0, "r": 0, "b": 0}
@@ -140,10 +61,10 @@ def mk_card(ticker: str):  # type: ignore[no-untyped-def]
     )
 
     last_dt = ts.index.max()
-    last_wk_dt = get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(7))  # type: ignore[attr-defined]
-    last_yr_dt = get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(365))  # type: ignore[attr-defined]
+    last_wk_dt = rcm.lib.get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(7))  # type: ignore[attr-defined]
+    last_yr_dt = rcm.lib.get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(365))  # type: ignore[attr-defined]
 
-    last_week_year_table = asHtmlTable(
+    last_week_year_table = rcm.lib.as_html_table(
         [
             (None, "Date", str.title(metric)),
             (
@@ -163,30 +84,30 @@ def mk_card(ticker: str):  # type: ignore[no-untyped-def]
             ),
         ]
     )
-    details_table = asHtmlTable(
+    details_table = rcm.lib.as_html_table(
         [
             (
                 "Product",
-                str(ticker_ref_data["cot product"]),
+                str(ticker_ref_data["Product"]),
             ),
             (
                 "Direction",
-                str(ticker_ref_data["direction"]),
+                str(ticker_ref_data["Direction"]),
             ),
             (
                 "Type",
-                str(ticker_ref_data["tradertype"]),
+                str(ticker_ref_data["TraderType"]),
             ),
         ]
         + [
             ("Activity", str(act))
-            for act in [ticker_ref_data["activity"]]
+            for act in [ticker_ref_data["Activity"]]
             if type(act) == str  # if value does not exist, pandas returns NaN
         ]
         + [
             (
                 "Source",
-                str(ticker_ref_data["cot source"]),
+                str(ticker_ref_data["Source"]),
             ),
         ],
         colHeaders=False,
@@ -196,7 +117,7 @@ def mk_card(ticker: str):  # type: ignore[no-untyped-def]
         [
             dbc.CardHeader(html.Span(children=ticker, id=ticker + "-card-header")),
             dbc.Tooltip(
-                children=str(ticker_ref_data["description"]),
+                children=str(ticker_ref_data["Description"]),
                 target=ticker + "-card-header",
             ),
             dbc.CardBody(
@@ -233,7 +154,7 @@ app.layout = dbc.Container(
                             {
                                 "label": tk
                                 + " ("
-                                + tickers_ref_data.loc[tk, "description"]
+                                + tickers_ref_data.loc[tk, "Description"]
                                 + ")",
                                 "value": tk,
                             }
