@@ -1,5 +1,5 @@
-import rcm.cot
+from rcm.cot2 import main
 
 
 if __name__ == "__main__":
-    rcm.cot.main()
+    main()
