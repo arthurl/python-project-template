@@ -1,6 +1,8 @@
 """Module"""
 # pylint: disable=unused-import, missing-function-docstring
 
+from typing import TypeVar, Optional, Tuple, Dict, List, Any, Iterable
+
 import time
 
 import dash
@@ -15,7 +17,9 @@ import pandas as pd
 ################################################################################
 
 
-def asHtmlTable(ls, colHeaders: bool = True, rowHeaders: bool = True):
+def asHtmlTable(
+    ls: Iterable[Tuple], colHeaders: bool = True, rowHeaders: bool = True
+) -> Any:
     it = iter(ls)
     table = []
     if colHeaders:
@@ -41,14 +45,17 @@ def asHtmlTable(ls, colHeaders: bool = True, rowHeaders: bool = True):
     return dbc.Table(table)
 
 
-def get_nearest_index(timeseries, x):
+Index = TypeVar("Index")
+
+
+def get_nearest_index(timeseries: pd.DataFrame, i: Index) -> Optional[Index]:
     try:
-        return timeseries.index[timeseries.index.get_loc(x, method="nearest")]
+        return timeseries.index[timeseries.index.get_loc(i, method="nearest")]  # type: ignore[attr-defined, return-value]
     except KeyError:
         return None
 
 
-def rcm_download_bloomberg_ticker(ticker: str):
+def rcm_download_bloomberg_ticker(ticker: str) -> pd.DataFrame:
     import urllib
     import io
     import win32com.client  # type: ignore
@@ -67,10 +74,10 @@ def rcm_download_bloomberg_ticker(ticker: str):
     h.SetAutoLogonPolicy(0)
     print(f'INFO: Downloading ticker "{ticker}"')
     start_time = time.perf_counter_ns()
-    h.Open("POST", url + "?" + urllib.parse.urlencode(query), False)  # type: ignore
+    h.Open("POST", url + "?" + urllib.parse.urlencode(query), False)  # type: ignore[attr-defined]
     h.Send()
     with io.StringIO(h.responseText) as buf:
-        result = pd.read_csv(buf, parse_dates=["Date"]).rename(columns=str.lower)  # type: ignore
+        result = pd.read_csv(buf, parse_dates=["Date"]).rename(columns=str.lower)  # type: ignore[arg-type]
     print(
         f'INFO: Downloaded ticker "{ticker}" in '
         f"{(time.perf_counter_ns() - start_time) / 1000000}ms"
@@ -81,14 +88,14 @@ def rcm_download_bloomberg_ticker(ticker: str):
 ################################################################################
 
 
-tickers_ref_data = (
+tickers_ref_data: pd.DataFrame = (
     pd.read_csv(r"c:/src/cotdatafetcher/test_data/tickers.csv")
     .rename(columns=str.lower)  # type: ignore
     .set_index("ticker")
 )
 
 
-def get_timeseries(ticker: str):
+def get_timeseries(ticker: str) -> pd.DataFrame:
     import os
 
     path: str = f"c:/src/python/python-project-template/data/{ticker}.csv"
@@ -105,7 +112,15 @@ def get_timeseries(ticker: str):
     return result
 
 
-def mk_card(ticker: str):
+def f(ticker: str) -> pd.DataFrame:
+    result = pd.read_csv(
+        f"c:/src/python/python-project-template/data/{ticker}.csv",
+        parse_dates=["date"],
+    ).set_index("date")
+    return result
+
+
+def mk_card(ticker: str):  # type: ignore[no-untyped-def]
     ticker_ref_data = tickers_ref_data.loc[ticker]
     ts = get_timeseries(ticker)
 
@@ -116,7 +131,7 @@ def mk_card(ticker: str):
             x=ts.index,
             y="last",
             labels={
-                (ts.index.name): str.title(ts.index.name),
+                (ts.index.name): str.title(ts.index.name),  # type: ignore[attr-defined]
                 "last": metric,
             },
         ).update_layout(
@@ -125,25 +140,25 @@ def mk_card(ticker: str):
     )
 
     last_dt = ts.index.max()
-    last_wk_dt = get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(7))  # type: ignore
-    last_yr_dt = get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(365))  # type: ignore
+    last_wk_dt = get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(7))  # type: ignore[attr-defined]
+    last_yr_dt = get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(365))  # type: ignore[attr-defined]
 
     last_week_year_table = asHtmlTable(
         [
             (None, "Date", str.title(metric)),
             (
                 "Last",
-                last_dt.date(),
-                ts.loc[last_dt].values[0],
+                last_dt.date(),  # type: ignore[attr-defined]
+                ts.loc[last_dt].values[0],  # type: ignore[call-overload]
             ),
             (
                 "~Week",
-                last_wk_dt.date(),
+                last_wk_dt.date(),  # type: ignore[union-attr]
                 ts.loc[last_wk_dt].values[0] if last_wk_dt else "<not available>",
             ),
             (
                 "~Year",
-                last_yr_dt.date(),
+                last_yr_dt.date(),  # type: ignore[union-attr]
                 ts.loc[last_yr_dt].values[0] if last_yr_dt else "<not available>",
             ),
         ]
@@ -222,7 +237,7 @@ app.layout = dbc.Container(
                                 + ")",
                                 "value": tk,
                             }
-                            for tk in tickers_ref_data.index.values  # type: ignore
+                            for tk in tickers_ref_data.index.values  # type: ignore[attr-defined]
                         ],
                     )
                 )
@@ -243,6 +258,9 @@ app.layout = dbc.Container(
 )
 
 
+Dropdown = List[Dict[str, str]]
+
+
 @app.callback(
     output=dict(
         dropdown_options=Output("ticker-dropdown", "options"),
@@ -254,7 +272,9 @@ app.layout = dbc.Container(
         ticker_graphs=State("ticker-graphs", "children"),
     ),
 )
-def add_ticker(ticker: str, dropdown_options, ticker_graphs):
+def add_ticker(  # type: ignore[no-untyped-def]
+    ticker: str, dropdown_options: Dropdown, ticker_graphs: List[Any]
+):  # note: doesn't work with annotated result type..?
     start_time = time.perf_counter_ns()
     if ticker:
         idx = next(
@@ -279,7 +299,7 @@ def add_ticker(ticker: str, dropdown_options, ticker_graphs):
     return dict(dropdown_options=dropdown_options, ticker_graphs=ticker_graphs)
 
 
-def main():
+def main() -> None:
     app.run_server(debug=True)
 
 
