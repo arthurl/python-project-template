@@ -1,8 +1,9 @@
 """Module"""
 # pylint: disable=unused-import, missing-function-docstring
 
-from typing import TypeVar, Optional, Tuple, Any, Iterable
+from typing import TypeVar, Optional, Tuple, Any, Iterable, Callable
 
+import itertools
 import time
 
 from dash import html
@@ -10,7 +11,7 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 
 
-def rcm_download_bloomberg_ticker(ticker: str) -> pd.DataFrame:
+def rcm_download_bloomberg_ticker(ticker: str, field: str) -> pd.DataFrame:
     import urllib
     import io
     import win32com.client  # type: ignore
@@ -32,13 +33,19 @@ def rcm_download_bloomberg_ticker(ticker: str) -> pd.DataFrame:
     h.Open("POST", url + "?" + urllib.parse.urlencode(query), False)  # type: ignore[attr-defined]
     h.Send()
     with io.StringIO(h.responseText) as buf:
-        result = pd.read_csv(buf, parse_dates=["Date"])
+        result = pd.read_csv(
+            buf, parse_dates=["Date"], dtype=str, usecols=["Date", field]
+        )  # result is left as string to avoid parsing numbers at this stage
+    result = result[result[field].map(lambda x: type(x) == str)]  # strip NaN
+    result[field] = pd.to_numeric(result[field])
     print(
         f'INFO: Downloaded ticker "{ticker}" in '
         f"{(time.perf_counter_ns() - start_time) / 1000000}ms"
     )
-    return result[result["Message"] != "No response for date"][["Date", "Last"]]
+    return result
 
+
+################################################################################
 
 Index = TypeVar("Index")
 
@@ -50,12 +57,39 @@ def get_nearest_index(timeseries: pd.DataFrame, i: Index) -> Optional[Index]:
         return None
 
 
+def index_from_product(i1: pd.MultiIndex, i2: pd.MultiIndex) -> pd.MultiIndex:
+    """Outer product of indices. Relative ordering is maintained."""
+    new_idx_frame = i1.to_frame().merge(i2.to_frame(), how="cross")  # type: ignore[call-overload]
+    return pd.MultiIndex.from_frame(new_idx_frame)
+
+
+def inner_expand(df: pd.DataFrame, f_index: pd.MultiIndex, f: Callable) -> pd.DataFrame:
+    def series_inner_expand(
+        df: pd.Series, f_index: pd.MultiIndex, f: Callable
+    ) -> pd.Series:
+        new_index = index_from_product(df.index, f_index)  # type: ignore[arg-type]
+        result = pd.Series(  # type: ignore[call-arg]
+            itertools.chain.from_iterable(f(df[c]) for c in df.index),  # type: ignore[arg-type]
+            index=new_index,
+            dtype=object,
+        )
+        return result
+
+    return df.apply(  # type: ignore[return-value]
+        lambda row: series_inner_expand(row, f_index, f),
+        axis=1,
+    )
+
 ################################################################################
 
+def to_string_truncate_if_float(x: Any, digits: int) -> str:
+    if type(x) == float:
+        return ("%." + str(digits) + "f") % x
+    return str(x)
 
-def as_html_table(
+def as_html_table(  # type: ignore[no-untyped-def]
     ls: Iterable[Tuple], colHeaders: bool = True, rowHeaders: bool = True
-) -> Any:
+):
     it = iter(ls)
     table = []
     if colHeaders:
