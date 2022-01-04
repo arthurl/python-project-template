@@ -209,7 +209,8 @@ app.layout = dbc.Container(
             className="py-1",
         ),
         dbc.Row(children=dbc.Col(children=html.Div(id="product-info"))),
-        dbc.Row(children=dbc.Col(children=dcc.Graph(id="graphic"))),
+        dbc.Row(children=dbc.Col(children=html.H5(id="graphic-title"))),
+        dbc.Row(children=dbc.Col(children=html.Div(id="graphic"))),
     ],
     fluid=True,
 )
@@ -348,7 +349,8 @@ def source_callback(  # type: ignore[no-untyped-def]
 
 @app.callback(
     output=dict(
-        graphic=Output("graphic", "figure"),
+        graphic_title=Output("graphic-title", "children"),
+        graphic=Output("graphic", "children"),
         #dbg_output=Output("dbg_output", "children"),
     ),
     inputs=dict(
@@ -434,10 +436,9 @@ def ticker_group_callback(
         x="Date",
         y=plot_index["Metric"],
         color="Direction",
-        title=plot_title,
     ).update_layout(
         plot_bgcolor="white",
-        margin={"l": 0, "r": 0, "b": 0},
+        margin={"t": 0, "l": 0, "r": 0, "b": 0},
         xaxis=axis_format,
         yaxis=axis_format,
     )
@@ -447,7 +448,8 @@ def ticker_group_callback(
         f"{(time.perf_counter_ns() - start_time) / 1000000}ms"
     )
     return dict(
-        graphic=fig,
+        graphic_title=plot_title,
+        graphic=dcc.Graph(figure=fig),
     )
 
 
