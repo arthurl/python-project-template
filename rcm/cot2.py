@@ -5,6 +5,7 @@ from typing import Optional, Tuple, Dict, List, Any
 
 import rcm.lib
 
+import functools
 import time
 import math
 
@@ -18,7 +19,7 @@ import plotly.express as px
 import pandas as pd
 
 
-def get_timeseries(ticker: str) -> pd.DataFrame:
+def get_timeseries(ticker: str, field: str) -> pd.DataFrame:
     import os
 
     path: str = f"data/cache/{ticker}.csv"
@@ -31,7 +32,7 @@ def get_timeseries(ticker: str) -> pd.DataFrame:
     else:
         print(f"INFO: {path} does not exist.")
         result = rcm.lib.rcm_download_bloomberg_ticker(
-            ticker + " Index", "Last"
+            ticker + " Index", field
         ).set_index("Date")
         result.to_csv(path)
     return result
@@ -42,7 +43,7 @@ def get_history_summary(ticker: Any) -> Tuple:
     if type(ticker) != str:
         return default_result
 
-    ts = get_timeseries(ticker)
+    ts = get_timeseries(ticker, "Last")
     last_dt = ts.index.max()
     last_wk_dt = rcm.lib.get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(7))  # type: ignore[attr-defined]
     last_4wk_dt = rcm.lib.get_nearest_index(ts, last_dt - pd.tseries.offsets.Day(28))  # type: ignore[attr-defined]
@@ -211,6 +212,8 @@ app.layout = dbc.Container(
             className="py-1",
         ),
         dbc.Row(children=dbc.Col(children=html.Div(id="product-info"))),
+        dbc.Row(children=dbc.Col(children=dcc.Graph(id="graphic-tmp"))),
+        dbc.Row(children=dbc.Col(children=dcc.Graph(id="graphic"))),
     ],
     fluid=True,
 )
@@ -291,6 +294,7 @@ def report_type_callback(
 @app.callback(
     output=dict(
         product_info=Output("product-info", "children"),
+        graphic=Output("graphic-tmp", "figure"),
     ),
     inputs=dict(
         product=State("product-selection", "value"),
@@ -315,16 +319,61 @@ def source_callback(  # type: ignore[no-untyped-def]
         df = df[df["ReportType"] == report_type]
     table = None
     if regulation == "CFTC":
+        plot_index = [
+            "TraderType",
+            "AssetType",
+            "Metric",
+        ]
         if report_type == "All Disaggregated":
             table = mk_cftc_disaggregated(df)
         elif report_type == "All Legacy":
             table = mk_cftc_legacy(df)
     elif regulation == "MiFID":
         table = mk_mifid(df)
+        plot_index = [
+            "TraderType",
+            "Activity",
+            "Metric",
+        ]
     assert table is not None
     table = table.applymap(  # type: ignore[operator]
         lambda x: rcm.lib.to_string_truncate_if_float(x, 2), na_action="ignore"
     )
+
+    ts_tickers = df[
+        functools.reduce(
+            lambda a, b: a & b,
+            (
+                (df[idx] == val)
+                for idx, val in zip(plot_index, df[plot_index].iloc[0].values)
+            ),
+        )
+    ][
+        [
+            "Direction",
+            "Ticker",
+        ]
+    ]
+    timeseries = functools.reduce(
+        lambda a, b: a.join(b, how="outer"),
+        (
+            get_timeseries(t, "Last").rename({"Last": d}, axis=1)
+            for d, t in ts_tickers.values
+        ),
+    )
+    timeseries.columns.name = "Direction"
+    timeseries = timeseries.unstack()
+    timeseries.name = "Value"
+    timeseries = timeseries.reset_index()
+
+    fig = px.line(
+        timeseries,
+        x="Date",
+        y="Value",
+        color="Direction"
+    ).update_layout(
+        margin={"t": 0, "l": 0, "r": 0, "b": 0}
+    )  # remove top margins
 
     print(
         r"INFO: Elasped wall time for add_ticker callback: "
@@ -332,6 +381,7 @@ def source_callback(  # type: ignore[no-untyped-def]
     )
     return dict(
         product_info=dbc.Table.from_dataframe(table, hover=True, index=True),
+        graphic=fig,
     )
 
 
