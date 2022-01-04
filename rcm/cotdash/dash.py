@@ -215,6 +215,7 @@ app.layout = dbc.Container(
         dbc.Row(children=dbc.Col(children=html.Div(id="product-info"))),
         dbc.Row(children=dbc.Col(children=html.H5(id="graphic-title"))),
         dbc.Row(children=dbc.Col(children=html.Div(id="graphic"))),
+        # dbc.Row(children=dbc.Col(children=html.Div(id="dbg_output"))),
     ],
     fluid=True,
 )
@@ -362,7 +363,7 @@ def source_callback(  # type: ignore[no-untyped-def]
     output=dict(
         graphic_title=Output("graphic-title", "children"),
         graphic=Output("graphic", "children"),
-        #dbg_output=Output("dbg_output", "children"),
+        # dbg_output=Output("dbg_output", "children"),
     ),
     inputs=dict(
         product=State("product-selection", "value"),
@@ -377,6 +378,9 @@ def source_callback(  # type: ignore[no-untyped-def]
 def ticker_group_callback(
     product: str, regulation: str, report_type: str, source: str, cell_click: List[int]
 ):
+    # if not product:
+    #    print(r"INFO: No product value. Ignoring callback.")
+    #    return dash.no_update
     start_time = time.perf_counter_ns()
 
     ctx = dash.callback_context
@@ -390,6 +394,19 @@ def ticker_group_callback(
     except SyntaxError:
         print(r"INFO: No triggered cell. Ignoring callback.")
         return dash.no_update
+
+    # dbg_output = [
+    #     html.Pre(
+    #         json.dumps(
+    #             {
+    #                 "triggered_cell": triggered_cell,
+    #                 "triggered": ctx.triggered,
+    #                 "inputs": ctx.inputs,
+    #             },
+    #             indent=2,
+    #         )
+    #     ),
+    # ]
 
     df = get_relevant_ref_data(
         product, regulation, None if report_type == "<none>" else report_type, source
@@ -461,6 +478,7 @@ def ticker_group_callback(
     return dict(
         graphic_title=plot_title,
         graphic=dcc.Graph(figure=fig),
+        # dbg_output=dbg_output,
     )
 
 
