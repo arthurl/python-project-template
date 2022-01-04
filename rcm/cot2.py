@@ -164,25 +164,30 @@ app.layout = dbc.Container(
             children=[
                 dbc.Col(
                     width=7,
-                    children=dcc.Dropdown(
-                        id="product-selection",
-                        options=[
-                            {
-                                "label": product
-                                + " ("
-                                + "/".join(
-                                    i for i in items["Underlying"] if type(i) == str
-                                )
-                                + ")",
-                                "value": product,
-                            }
-                            for product, items in tickers_ref_data[  # type: ignore[call-arg]
-                                ["Product", "Underlying"]
-                            ]
-                            .drop_duplicates(ignore_index=True)
-                            .groupby("Product")
-                        ],
-                    ),
+                    children=[
+                        dcc.Dropdown(
+                            id="product-selection",
+                            options=[
+                                {
+                                    "label": product
+                                    + " ("
+                                    + "/".join(
+                                        i for i in items["Underlying"] if type(i) == str
+                                    )
+                                    + ")",
+                                    "value": product,
+                                }
+                                for product, items in tickers_ref_data[  # type: ignore[call-arg]
+                                    ["Product", "Underlying"]
+                                ]
+                                .drop_duplicates(ignore_index=True)
+                                .groupby("Product")
+                            ],
+                        ),
+                        html.Small(
+                            r"(Initial loading of data is slow, for now. Please wait ~30s when viewing a dataset for the first time.)"
+                        ),
+                    ],
                 ),
                 dbc.Col(
                     width=1,
@@ -330,19 +335,26 @@ def source_callback(  # type: ignore[no-untyped-def]
     dftable_idx = dftable.index
     dftable_cols = dftable.columns
     return dict(
-        product_info=rcm.dbc_table.generate_table_from_df(
-            dftable,
-            hover=True,
-            index=True,
-            cell_type="product-table-cell",
-            cell_x_label_func=lambda i: str((i, dftable_idx[i][0])),
-            cell_y_label_func=lambda j: str(
-                # The index j is part of the key as react doesn't like it when
-                # two elemets have the same id.
-                (j, dftable_cols[j - 2][0], dftable_cols[j - 2][1])
-            )
-            if j >= 2
-            else f"<index>{j}",
+        product_info=html.Div(
+            [
+                rcm.dbc_table.generate_table_from_df(
+                    dftable,
+                    hover=True,
+                    index=True,
+                    cell_type="product-table-cell",
+                    cell_x_label_func=lambda i: str((i, dftable_idx[i][0])),
+                    cell_y_label_func=lambda j: str(
+                        # The index j is part of the key as react doesn't like it when
+                        # two elemets have the same id.
+                        (j, dftable_cols[j - 2][0], dftable_cols[j - 2][1])
+                    )
+                    if j >= 2
+                    else f"<index>{j}",
+                ),
+                html.Small(
+                    "Click on figures to see historical plot", style={"float": "right"}
+                ),
+            ]
         ),
     )
 
