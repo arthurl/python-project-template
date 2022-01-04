@@ -4,15 +4,18 @@
 from typing import Optional, Tuple, Dict, List, Any
 
 import rcm.lib
+import rcm.dbc_table
 
 import functools
 import time
 import math
+import ast
+import json
 
 import dash
 from dash import dcc
 from dash import html
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output, State, ALL
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import plotly.express as px
@@ -134,10 +137,11 @@ tickers_ref_data: pd.DataFrame = pd.read_csv(
 )
 
 
-def get_relevant(product: str, regulation: str, report_type: Optional[str]):  # type: ignore[no-untyped-def]
-    product_ref = tickers_ref_data[
+def get_relevant_ref_data(product: str, regulation: str, report_type: Optional[str], source: str):  # type: ignore[no-untyped-def]
+    product_ref: pd.DataFrame = tickers_ref_data[
         (tickers_ref_data["Product"] == product)
         & (tickers_ref_data["Regulation"] == regulation)
+        & (tickers_ref_data["Source"] == source)
     ]
     if report_type:
         product_ref = product_ref[product_ref["ReportType"] == report_type]
@@ -153,13 +157,6 @@ app = dash.Dash(
     ],
 )
 
-
-test_df = tickers_ref_data[
-    (tickers_ref_data["Product"] == "US Crude WTI Future")
-    & (tickers_ref_data["Regulation"] == "CFTC")
-    & (tickers_ref_data["ReportType"] == "All Disaggregated")
-    & (tickers_ref_data["Source"] == "New York Mercantile Exchange")
-]
 
 app.layout = dbc.Container(
     children=[
@@ -212,7 +209,6 @@ app.layout = dbc.Container(
             className="py-1",
         ),
         dbc.Row(children=dbc.Col(children=html.Div(id="product-info"))),
-        dbc.Row(children=dbc.Col(children=dcc.Graph(id="graphic-tmp"))),
         dbc.Row(children=dbc.Col(children=dcc.Graph(id="graphic"))),
     ],
     fluid=True,
@@ -294,7 +290,6 @@ def report_type_callback(
 @app.callback(
     output=dict(
         product_info=Output("product-info", "children"),
-        graphic=Output("graphic-tmp", "figure"),
     ),
     inputs=dict(
         product=State("product-selection", "value"),
@@ -310,50 +305,107 @@ def source_callback(  # type: ignore[no-untyped-def]
         print(r"INFO: No product value. Ignoring callback.")
         return dash.no_update
     start_time = time.perf_counter_ns()
-    df: pd.DataFrame = tickers_ref_data[
-        (tickers_ref_data["Product"] == product)
-        & (tickers_ref_data["Regulation"] == regulation)
-        & (tickers_ref_data["Source"] == source)
-    ]
-    if report_type != "<none>":
-        df = df[df["ReportType"] == report_type]
-    table = None
+
+    df = get_relevant_ref_data(
+        product, regulation, None if report_type == "<none>" else report_type, source
+    )
+    dftable = None
     if regulation == "CFTC":
-        plot_index = [
-            "TraderType",
-            "AssetType",
-            "Metric",
-        ]
         if report_type == "All Disaggregated":
-            table = mk_cftc_disaggregated(df)
+            dftable = mk_cftc_disaggregated(df)
         elif report_type == "All Legacy":
-            table = mk_cftc_legacy(df)
+            dftable = mk_cftc_legacy(df)
     elif regulation == "MiFID":
-        table = mk_mifid(df)
-        plot_index = [
-            "TraderType",
-            "Activity",
-            "Metric",
-        ]
-    assert table is not None
-    table = table.applymap(  # type: ignore[operator]
+        dftable = mk_mifid(df)
+    assert dftable is not None
+    dftable = dftable.applymap(  # type: ignore[operator]
         lambda x: rcm.lib.to_string_truncate_if_float(x, 2), na_action="ignore"
     )
+
+    print(
+        r"INFO: Elasped wall time for source_callback: "
+        f"{(time.perf_counter_ns() - start_time) / 1000000}ms"
+    )
+    dftable_idx = dftable.index
+    dftable_cols = dftable.columns
+    return dict(
+        product_info=rcm.dbc_table.generate_table_from_df(
+            dftable,
+            hover=True,
+            index=True,
+            cell_type="product-table-cell",
+            cell_x_label_func=lambda i: str((i, dftable_idx[i][0])),
+            cell_y_label_func=lambda j: str(
+                # The index j is part of the key as react doesn't like it when
+                # two elemets have the same id.
+                (j, dftable_cols[j - 2][0], dftable_cols[j - 2][1])
+            )
+            if j >= 2
+            else f"<index>{j}",
+        ),
+    )
+
+
+@app.callback(
+    output=dict(
+        graphic=Output("graphic", "figure"),
+        #dbg_output=Output("dbg_output", "children"),
+    ),
+    inputs=dict(
+        product=State("product-selection", "value"),
+        regulation=State("regulation-selection", "value"),
+        report_type=State("report-type-selection", "value"),
+        source=State("source-selection", "value"),
+        cell_click=Input(
+            {"type": "product-table-cell", "x": ALL, "y": ALL}, "n_clicks"
+        ),
+    ),
+)
+def ticker_group_callback(
+    product: str, regulation: str, report_type: str, source: str, cell_click: List[int]
+):
+    start_time = time.perf_counter_ns()
+
+    ctx = dash.callback_context
+    # Upon initial load, this callback is strangely triggered with [{'prop_id':
+    # '.', 'value': None}]. So triggered[-1] always works.
+    triggered_cell = ctx.triggered[-1]["prop_id"][:-9]  # remove ".n_clicks" suffix
+    try:
+        triggered_cell = ast.literal_eval(triggered_cell)
+        triggered_cell["x"] = ast.literal_eval(triggered_cell["x"])
+        triggered_cell["y"] = ast.literal_eval(triggered_cell["y"])
+    except SyntaxError:
+        print(r"INFO: No triggered cell. Ignoring callback.")
+        return dash.no_update
+
+    df = get_relevant_ref_data(
+        product, regulation, None if report_type == "<none>" else report_type, source
+    )
+    if regulation == "CFTC":
+        plot_index = {
+            "TraderType": triggered_cell["x"][1],
+            "AssetType": triggered_cell["y"][1],
+            "Metric": triggered_cell["y"][2],
+        }
+    elif regulation == "MiFID":
+        plot_index = {
+            "TraderType": triggered_cell["x"][1],
+            "Activity": triggered_cell["y"][1],
+            "Metric": triggered_cell["y"][2],
+        }
+    else:
+        raise Exception("Regulation type not recognised.")
+    plot_title = triggered_cell["x"][1] + " / " + triggered_cell["y"][1]
 
     ts_tickers = df[
         functools.reduce(
             lambda a, b: a & b,
-            (
-                (df[idx] == val)
-                for idx, val in zip(plot_index, df[plot_index].iloc[0].values)
-            ),
+            ((df[idx] == val) for idx, val in plot_index.items()),
         )
-    ][
-        [
-            "Direction",
-            "Ticker",
-        ]
-    ]
+    ][["Direction", "Ticker"]]
+    if not len(ts_tickers):
+        print(r"INFO: No data for triggered cell. Ignoring callback.")
+        return dash.no_update
     timeseries = functools.reduce(
         lambda a, b: a.join(b, how="outer"),
         (
@@ -362,25 +414,39 @@ def source_callback(  # type: ignore[no-untyped-def]
         ),
     )
     timeseries.columns.name = "Direction"
+    cols = timeseries.columns.tolist()
+    if "Long" in cols and "Short" in cols:
+        timeseries["Nett"] = timeseries["Long"] - timeseries["Short"]
+        # rearrange such that "Nett" is always the 3rd column
+        cols = cols[0:2] + ["Nett"] + cols[2:]
+        timeseries = timeseries[cols]
     timeseries = timeseries.unstack()
-    timeseries.name = "Value"
+    timeseries.name = plot_index["Metric"]
     timeseries = timeseries.reset_index()
 
+    axis_format = dict(
+        showline=False,
+        zerolinecolor="rgb(100, 100, 100)",
+        gridcolor="rgb(204, 204, 204)",
+    )
     fig = px.line(
         timeseries,
         x="Date",
-        y="Value",
-        color="Direction"
+        y=plot_index["Metric"],
+        color="Direction",
+        title=plot_title,
     ).update_layout(
-        margin={"t": 0, "l": 0, "r": 0, "b": 0}
-    )  # remove top margins
+        plot_bgcolor="white",
+        margin={"l": 0, "r": 0, "b": 0},
+        xaxis=axis_format,
+        yaxis=axis_format,
+    )
 
     print(
-        r"INFO: Elasped wall time for add_ticker callback: "
+        r"INFO: Elasped wall time for ticker_group_callback: "
         f"{(time.perf_counter_ns() - start_time) / 1000000}ms"
     )
     return dict(
-        product_info=dbc.Table.from_dataframe(table, hover=True, index=True),
         graphic=fig,
     )
 
