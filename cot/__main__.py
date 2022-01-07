@@ -1,4 +1,4 @@
-from rcm.cot2 import main
+from cot.dash import main
 
 
 if __name__ == "__main__":

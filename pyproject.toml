@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "arthurlib"  # has to be the same as first level folder, with - changed to _
+name = "cot"  # has to be the same as first level folder, with - changed to _
 version = "0.1.0"
 description = ""
 authors = ["Arthur Lee <me@arthur.li>"]
