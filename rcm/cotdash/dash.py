@@ -4,7 +4,7 @@
 from typing import Optional, Tuple, Dict, List, Any
 
 import rcm.lib
-import rcm.dbc_table
+import rcm.cotdash.dbc_table
 
 import functools
 import time
@@ -145,7 +145,6 @@ def get_relevant_ref_data(product: str, regulation: str, report_type: Optional[s
     ]
     if report_type:
         product_ref = product_ref[product_ref["ReportType"] == report_type]
-
     return product_ref
 
 

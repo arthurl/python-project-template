@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "arthurlib"  # has to be the same as first level folder, with - changed to _
+name = "rcm"  # has to be the same as first level folder, with - changed to _
 version = "0.1.0"
 description = ""
 authors = ["Arthur Lee <me@arthur.li>"]
@@ -25,4 +25,4 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-main = "rcm.cot:main"
+main = "rcm.cotdash.dash:main"
