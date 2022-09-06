@@ -5,17 +5,17 @@ description = ""
 authors = ["Arthur Lee <me@arthur.li>"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 
 [tool.poetry.dev-dependencies]
-# use `poetry add -dev pytest@latest` to upgrade
-pytest = "^5.2"
-pylint = "^2.11.1"
-flake8 = "^4.0.1"
-flake8-black = "^0.2.3"
-mypy = "^0.910"
+# use `poetry add --dev pytest@latest` to upgrade
+pytest = "^7.1.3"
+pylint = "^2.15.0"
+flake8 = "^5.0.4"
+flake8-black = "^0.3.3"
+pyright = "^1.1.269"
 data-science-types = "^0.2.23"
-types-requests = "^2.25.11"
+types-requests = "^2.28.9"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

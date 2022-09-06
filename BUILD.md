@@ -2,16 +2,17 @@
 
 ## Environment setup
 
-Put python dependencies in `default.nix`.
+Poetry is used. See https://www.youtube.com/watch?v=TbIHRHy7_JM and
+https://www.tweag.io/blog/2020-08-12-poetry2nix (and also
+https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/python.section.md
+and https://nixos.wiki/wiki/Python).
 
-`msg_parser` is included as an example of how to add arbitrary dependencies
-available on pypi but not in nixpkgs.
+Direnv is used to set the correct virtualenv.
 
-Run `nix-build` to build interpreter. The result works as a python virtualenv
-would.
+Upgrade to latest packages:
 
-Run `nix-shell` to set up environment. This would be the equivalent to
-“activating” a python virtualenv.
+    poetry add --dev pytest@latest pylint@latest flake8@latest flake8-black@latest pyright@latest data-science-types@latest types-requests@latest
 
-To generate requirements.txt for other users, do `nix-shell -p pipreqs --command
-'pipreqs .'`
+Run:
+
+    poetry run arthurexec
