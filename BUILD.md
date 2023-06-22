@@ -11,7 +11,7 @@ Direnv is used to set the correct virtualenv.
 
 Upgrade to latest packages:
 
-    poetry add --dev pytest@latest pylint@latest flake8@latest flake8-black@latest pyright@latest data-science-types@latest types-requests@latest
+    poetry update
 
 Run:
 
