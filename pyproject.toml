@@ -13,7 +13,7 @@ pylint = "*"
 flake8 = "*"
 flake8-black = "*"
 pyright = "*"
-data-science-types = "*"
+pandas-stubs = "*"
 types-requests = "*"
 
 [build-system]
