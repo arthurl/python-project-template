@@ -8,4 +8,6 @@ extend-ignore =
     E203
     # no point since I'm already using black
     E501
+    # conflicts with black
+    W504
 max-line-length = 88
